@@ -13,6 +13,13 @@ public class ZkBarrierTest {
     private final String name;
     private final int seq;
     private final ZkBarrier barrier;
+
+    /**
+     * constructor of runnable
+     * @param name name of Process, which will be used to create child znode
+     * @param seq sequence id of Process
+     * @param barrier zkBarrier object
+     */
     public Process (String name, int seq, ZkBarrier barrier) {
       this.name = name;
       this.seq = seq;
@@ -21,6 +28,10 @@ public class ZkBarrierTest {
 
     public void run() {
       try {
+        // set delay time ot seq * 5000 to make zk notification processing
+        // once at a time, this way we can see the difference between notify and
+        // notifyAll in Watcher.process(notify can not make all thread leave as expected,
+        // notifyAll then can work well)
         if (barrier.enter(name, seq * 5000)) {
           System.out.println(name + " enter");
           barrier.leave(name);

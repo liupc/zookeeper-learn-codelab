@@ -21,7 +21,14 @@ public class ZkBarrier implements Watcher{
   private ZooKeeper zk;
   private static final byte[] mutex = new byte[0];
   private boolean shutdown;
-
+  /**
+   * Barrier is to make all workers in a group begin to work simultaneously,
+   * and can only leave after all workers finish their work.
+   *
+   * @param hostPort host:port like string indicating zookeeper server addr
+   * @param root root znode
+   * @param size group scale
+   */
   public ZkBarrier(String hostPort, String root, int size) {
     this.root = root;
     this.size = size;
@@ -45,6 +52,7 @@ public class ZkBarrier implements Watcher{
         case AuthFailed:
         case Disconnected:
         case Expired:
+          // in case of zookeeper connection failed(auth failure, disconnected, expired.)
           shutdown();
           return;
         default:
@@ -52,6 +60,8 @@ public class ZkBarrier implements Watcher{
       }
     } else {
       synchronized (mutex) {
+        // notify all waiter thread on mutex, must be notifyAll,
+        // notify will only notify one waiting thread
         mutex.notifyAll();
       }
     }
@@ -62,6 +72,14 @@ public class ZkBarrier implements Watcher{
     mutex.notifyAll();
   }
 
+  /**
+   *
+   * @param name name of child znode to create under root znode
+   * @param delayTime milliseconds to delay before enter
+   * @return
+   * @throws KeeperException
+   * @throws InterruptedException
+   */
   public boolean enter(String name, long delayTime) throws KeeperException, InterruptedException {
     Thread.sleep(delayTime);
     zk.create(root + "/" + name, new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
@@ -75,6 +93,7 @@ public class ZkBarrier implements Watcher{
             return true;
         }
       } else {
+        // return false when shutdown is true
         return false;
       }
     }
