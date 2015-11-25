@@ -15,19 +15,20 @@ import org.apache.zookeeper.data.Stat;
  * All rights reserved.
  * Author: liupengcheng@xiaomi.com
  */
-public class ZkBarrier implements Watcher{
+public class ZkBarrier implements Watcher {
   private final String root;
   private final int size;
   private ZooKeeper zk;
   private static final byte[] mutex = new byte[0];
   private boolean shutdown;
+
   /**
    * Barrier is to make all workers in a group begin to work simultaneously,
    * and can only leave after all workers finish their work.
    *
    * @param hostPort host:port like string indicating zookeeper server addr
-   * @param root root znode
-   * @param size group scale
+   * @param root     root znode
+   * @param size     group scale
    */
   public ZkBarrier(String hostPort, String root, int size) {
     this.root = root;
@@ -44,7 +45,9 @@ public class ZkBarrier implements Watcher{
       e.printStackTrace();
     }
   }
+
   public void process(WatchedEvent watchedEvent) {
+    System.out.println(Thread.currentThread().getName() + " watcher are notified.");
     Event.EventType type = watchedEvent.getType();
     if (type == Event.EventType.None) {
       Event.KeeperState state = watchedEvent.getState();
@@ -60,21 +63,19 @@ public class ZkBarrier implements Watcher{
       }
     } else {
       synchronized (mutex) {
-        // notify all waiter thread on mutex, must be notifyAll,
-        // notify will only notify one waiting thread
-        mutex.notifyAll();
+        // notify all waiter thread on mutex, only one waiter for each mutex in barrier
+        mutex.notify();
       }
     }
   }
 
   private void shutdown() {
     this.shutdown = true;
-    mutex.notifyAll();
+    mutex.notify();
   }
 
   /**
-   *
-   * @param name name of child znode to create under root znode
+   * @param name      name of child znode to create under root znode
    * @param delayTime milliseconds to delay before enter
    * @return
    * @throws KeeperException
@@ -83,14 +84,15 @@ public class ZkBarrier implements Watcher{
   public boolean enter(String name, long delayTime) throws KeeperException, InterruptedException {
     Thread.sleep(delayTime);
     zk.create(root + "/" + name, new byte[0], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
-    while(true) {
+    while (true) {
       if (!shutdown) {
         synchronized (mutex) {
           List<String> children = zk.getChildren(root, this);
-          if (children.size() < size)
+          if (children.size() < size) {
             mutex.wait();
-          else
+          } else {
             return true;
+          }
         }
       } else {
         // return false when shutdown is true

@@ -1,6 +1,6 @@
 package com.xiaomi.lpc.barrier;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Random;
 
 /**
  * Copyright 2015, Xiaomi.
@@ -29,11 +29,11 @@ public class ZkBarrierTest {
     public void run() {
       try {
         // set delay time ot seq * 5000 to make zk notification processing
-        // once at a time, this way we can see the difference between notify and
-        // notifyAll in Watcher.process(notify can not make all thread leave as expected,
-        // notifyAll then can work well)
+        // once at a time
         if (barrier.enter(name, seq * 5000)) {
           System.out.println(name + " enter");
+          // make sure all threads entered processing state
+          Thread.sleep(1000 + new Random().nextInt(2000));
           barrier.leave(name);
           System.out.println(name + " leave");
         } else {
@@ -47,12 +47,16 @@ public class ZkBarrierTest {
         e.printStackTrace();
       }
     }
+
   }
 
   public static void main(String[] args) throws Exception {
-    ZkBarrier barrier = new ZkBarrier("127.0.0.1:2181", "/test", 3);
     for (int i=0; i<3; i++) {
+      // each Thread contains a barrier and manage their own zkClient,
+      // when changes happen in znode, all zkClient watching this znode will be notified.
+      ZkBarrier barrier = new ZkBarrier("127.0.0.1:2181", "/test", 3);
       Thread t = new Thread(new Process("Process-" + i, i, barrier));
+      t.setName("Thread" + i);
       t.start();
     }
   }
